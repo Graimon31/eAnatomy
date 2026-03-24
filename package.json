@@ -1,0 +1,17 @@
+{
+  "name": "eanatomy",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Interactive Anatomy Atlas — MVP",
+  "scripts": {
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "build": "cd frontend && npm run build",
+    "db:migrate": "psql $DATABASE_URL -f db/schema.sql",
+    "db:seed": "cd backend && npx ts-node src/seed/seed.ts"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
