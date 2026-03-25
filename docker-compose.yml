@@ -1,0 +1,243 @@
+services:
+  # ═══════════════════════════════════════════════════════════
+  # DATA LAYER
+  # ═══════════════════════════════════════════════════════════
+
+  # ── PostgreSQL ─────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: eanatomy
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  # ── Kafka (KRaft — без Zookeeper) ─────────────────────────
+  kafka:
+    image: bitnami/kafka:3.7
+    ports:
+      - "9092:9092"
+      - "9094:9094"
+    environment:
+      # KRaft mode (no Zookeeper needed)
+      KAFKA_CFG_NODE_ID: 1
+      KAFKA_CFG_PROCESS_ROLES: broker,controller
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      # Auto-create topics used by the atlas
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_CFG_NUM_PARTITIONS: 3
+      KAFKA_CFG_DEFAULT_REPLICATION_FACTOR: 1
+      # Retention: keep events for 7 days
+      KAFKA_CFG_LOG_RETENTION_HOURS: 168
+    volumes:
+      - kafkadata:/bitnami/kafka
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # ── Kafka UI (веб-интерфейс для Kafka) ─────────────────────
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: eanatomy
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      DYNAMIC_CONFIG_ENABLED: "true"
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  # ═══════════════════════════════════════════════════════════
+  # SEARCH & ANALYTICS (ELK)
+  # ═══════════════════════════════════════════════════════════
+
+  # ── Elasticsearch ──────────────────────────────────────────
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.0
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.http.ssl.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - cluster.name=eanatomy
+    ports:
+      - "9200:9200"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+
+  # ── Kibana ─────────────────────────────────────────────────
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.13.0
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+      XPACK_SECURITY_ENABLED: "false"
+    ports:
+      - "5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:5601/api/status || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  # ── Kibana Setup (одноразовый — создаёт Data View и дашборды) ──
+  kibana-setup:
+    image: curlimages/curl:8.7.1
+    volumes:
+      - ./infra/kibana/setup-kibana.sh:/setup/setup-kibana.sh:ro
+      - ./infra/kibana/kibana-objects.ndjson:/setup/kibana-objects.ndjson:ro
+    environment:
+      KIBANA_URL: http://kibana:5601
+    command: ["sh", "/setup/setup-kibana.sh"]
+    depends_on:
+      kibana:
+        condition: service_healthy
+    restart: "no"
+
+  # ═══════════════════════════════════════════════════════════
+  # MONITORING
+  # ═══════════════════════════════════════════════════════════
+
+  # ── Prometheus ─────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=30d'
+    depends_on:
+      - backend
+
+  # ── Grafana ────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.1
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafanadata:/var/lib/grafana
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - elasticsearch
+
+  # ═══════════════════════════════════════════════════════════
+  # APPLICATION
+  # ═══════════════════════════════════════════════════════════
+
+  # ── Backend (Express API) ──────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
+    working_dir: /app
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/eanatomy
+      PORT: "4000"
+      CORS_ORIGIN: http://localhost:5173
+      KAFKA_BROKER: kafka:9092
+      KAFKA_ENABLED: "true"
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./backend/src:/app/src:ro
+      - ./backend/public:/app/public:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  # ── Kafka → Elasticsearch Consumer ────────────────────────
+  kafka-consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
+    working_dir: /app
+    environment:
+      KAFKA_BROKER: kafka:9092
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+    command: ["npx", "ts-node", "src/services/kafkaConsumer.ts"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    restart: on-failure
+
+  # ── DB Seed (одноразовый) ──────────────────────────────────
+  seed:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
+    working_dir: /app
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/eanatomy
+    command: ["npx", "ts-node", "src/seed/seed.ts"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  # ── Frontend (Vite dev server) ─────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: frontend
+    working_dir: /app
+    environment:
+      API_URL: http://backend:4000
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend/src:/app/src:ro
+      - ./frontend/index.html:/app/index.html:ro
+      - ./frontend/vite.config.ts:/app/vite.config.ts:ro
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  kafkadata:
+  esdata:
+  promdata:
+  grafanadata:
