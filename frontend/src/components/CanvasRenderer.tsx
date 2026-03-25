@@ -54,7 +54,6 @@ const CanvasRenderer: React.FC = () => {
 
   const {
     zoomAt,
-    adjustPan,
     setIsPanning,
     setHoveredPolygon,
     setSelectedPolygon,
