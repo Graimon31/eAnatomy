@@ -1,0 +1,74 @@
+services:
+  # ── PostgreSQL ──────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: eanatomy
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  # ── Backend (Express API) ───────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
+    working_dir: /app
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/eanatomy
+      PORT: "4000"
+      CORS_ORIGIN: http://localhost:5173
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./backend/src:/app/src:ro
+      - ./backend/public:/app/public:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── Seed (одноразовый — наполняет БД демо-данными) ──────
+  seed:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
+    working_dir: /app
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/eanatomy
+    command: ["npx", "ts-node", "src/seed/seed.ts"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  # ── Frontend (Vite dev server) ──────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: frontend
+    working_dir: /app
+    environment:
+      API_URL: http://backend:4000
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend/src:/app/src:ro
+      - ./frontend/index.html:/app/index.html:ro
+      - ./frontend/vite.config.ts:/app/vite.config.ts:ro
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:

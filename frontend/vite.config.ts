@@ -9,9 +9,10 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    host: '0.0.0.0',
     proxy: {
-      '/api': 'http://localhost:4000',
-      '/static': 'http://localhost:4000',
+      '/api': process.env.API_URL || 'http://localhost:4000',
+      '/static': process.env.API_URL || 'http://localhost:4000',
     },
   },
 });
