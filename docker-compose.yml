@@ -52,6 +52,19 @@ services:
       retries: 10
       start_period: 30s
 
+  # ── Kafka UI (веб-интерфейс для Kafka) ─────────────────────
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: eanatomy
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      DYNAMIC_CONFIG_ENABLED: "true"
+    depends_on:
+      kafka:
+        condition: service_healthy
+
   # ═══════════════════════════════════════════════════════════
   # SEARCH & ANALYTICS (ELK)
   # ═══════════════════════════════════════════════════════════
@@ -87,6 +100,26 @@ services:
     depends_on:
       elasticsearch:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:5601/api/status || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  # ── Kibana Setup (одноразовый — создаёт Data View и дашборды) ──
+  kibana-setup:
+    image: curlimages/curl:8.7.1
+    volumes:
+      - ./infra/kibana/setup-kibana.sh:/setup/setup-kibana.sh:ro
+      - ./infra/kibana/kibana-objects.ndjson:/setup/kibana-objects.ndjson:ro
+    environment:
+      KIBANA_URL: http://kibana:5601
+    command: ["sh", "/setup/setup-kibana.sh"]
+    depends_on:
+      kibana:
+        condition: service_healthy
+    restart: "no"
 
   # ═══════════════════════════════════════════════════════════
   # MONITORING
