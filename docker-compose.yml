@@ -115,8 +115,8 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      - "3000:3000"
-      - "3001:3001"
+      - "3010:3000"
+      - "3011:3001"
     volumes:
       - ./docker/nginx.conf:/etc/nginx/nginx.conf
       - public_dist:/usr/share/nginx/html/public:ro
