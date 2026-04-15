@@ -1,0 +1,23 @@
+# Binaries
+/api
+/worker
+*.exe
+
+# Environment
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node modules (frontends)
+node_modules/
+dist/
+
+# Temp
+tmp/

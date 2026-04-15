@@ -1,0 +1,13 @@
+DROP TABLE IF EXISTS annotations;
+DROP TABLE IF EXISTS anatomical_terms;
+DROP TABLE IF EXISTS term_categories;
+DROP TABLE IF EXISTS slice_images;
+DROP TABLE IF EXISTS slices;
+DROP TABLE IF EXISTS imaging_modes;
+DROP TABLE IF EXISTS projections;
+DROP TABLE IF EXISTS modules;
+DROP TABLE IF EXISTS modalities;
+DROP TABLE IF EXISTS regions;
+DROP TABLE IF EXISTS ip_access_ranges;
+DROP TABLE IF EXISTS subscriptions;
+DROP TABLE IF EXISTS users;
