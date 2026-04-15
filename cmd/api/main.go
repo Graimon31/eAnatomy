@@ -14,6 +14,10 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/graimon31/eanatomy/internal/config"
+	"github.com/graimon31/eanatomy/internal/domain/annotation"
+	"github.com/graimon31/eanatomy/internal/domain/module"
+	"github.com/graimon31/eanatomy/internal/domain/subscription"
+	"github.com/graimon31/eanatomy/internal/domain/user"
 	adminHandler "github.com/graimon31/eanatomy/internal/handler/admin"
 	authHandler "github.com/graimon31/eanatomy/internal/handler/auth"
 	editorHandler "github.com/graimon31/eanatomy/internal/handler/editor"
@@ -39,6 +43,26 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
+
+	// Auto-migrate database schema
+	if err := db.AutoMigrate(
+		&user.User{},
+		&subscription.Subscription{},
+		&subscription.IPAccessRange{},
+		&module.Region{},
+		&module.Modality{},
+		&module.Module{},
+		&module.Projection{},
+		&module.ImagingMode{},
+		&module.Slice{},
+		&module.SliceImage{},
+		&annotation.TermCategory{},
+		&annotation.AnatomicalTerm{},
+		&annotation.Annotation{},
+	); err != nil {
+		log.Fatalf("failed to auto-migrate: %v", err)
+	}
+	logger.Info("database migration completed")
 
 	// Redis
 	rdb := redis.NewClient(&redis.Options{
