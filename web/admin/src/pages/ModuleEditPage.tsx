@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   useEditorModules, useUpdateModule, useCreateProjection, useCreateMode,
   useUploadSlices, useTaskProgress, useEditorSlices,
@@ -13,6 +14,7 @@ import Badge from '../components/ui/Badge';
 export default function ModuleEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { data } = useEditorModules({});
   const module = data?.items.find((m: Module) => m.id === id);
 
@@ -100,7 +102,7 @@ export default function ModuleEditPage() {
               type: projType,
               sort_order: (module.projections?.length ?? 0) + 1,
             });
-            window.location.reload();
+            queryClient.invalidateQueries({ queryKey: ['editor', 'modules'] });
           }}>
             Add Projection
           </Button>
@@ -121,7 +123,7 @@ export default function ModuleEditPage() {
             if (!modeName.trim()) return;
             await createMode.mutateAsync({ moduleId: module.id, name: modeName });
             setModeName('');
-            window.location.reload();
+            queryClient.invalidateQueries({ queryKey: ['editor', 'modules'] });
           }}>
             Add Mode
           </Button>

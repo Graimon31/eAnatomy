@@ -152,7 +152,9 @@ func (s *AuthService) Logout(refreshToken string) error {
 	}
 
 	ctx := context.Background()
-	s.redis.Del(ctx, "refresh:"+claims.UserID.String())
+	if err := s.redis.Del(ctx, "refresh:"+claims.UserID.String()).Err(); err != nil {
+		return fmt.Errorf("failed to invalidate refresh token: %w", err)
+	}
 	return nil
 }
 
@@ -192,7 +194,9 @@ func (s *AuthService) generateTokens(u *user.User, subActive bool) (*AuthRespons
 	}
 
 	ctx := context.Background()
-	s.redis.Set(ctx, "refresh:"+u.ID.String(), refreshToken, s.jwtCfg.RefreshTTL)
+	if err := s.redis.Set(ctx, "refresh:"+u.ID.String(), refreshToken, s.jwtCfg.RefreshTTL).Err(); err != nil {
+		return nil, fmt.Errorf("failed to store refresh token: %w", err)
+	}
 
 	return &AuthResponse{
 		User:         u,

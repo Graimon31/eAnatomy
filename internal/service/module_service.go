@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -167,7 +168,7 @@ func (s *ModuleService) DeleteModule(id uuid.UUID, userID uuid.UUID, userRole st
 		projections, _ := s.projectionRepo.ListByModuleID(id)
 		for _, p := range projections {
 			prefix := fmt.Sprintf("%d/", p.ID)
-			_ = s.storage.DeleteFolder(nil, prefix)
+			_ = s.storage.DeleteFolder(context.Background(), prefix)
 		}
 	}
 
@@ -348,7 +349,7 @@ func (s *ModuleService) DeleteSlice(id uuid.UUID) error {
 	// Delete files from MinIO
 	if s.storage != nil {
 		prefix := fmt.Sprintf("%d/%04d", sl.ProjectionID, sl.SliceNumber)
-		_ = s.storage.DeleteFolder(nil, prefix)
+		_ = s.storage.DeleteFolder(context.Background(), prefix)
 	}
 
 	return s.sliceRepo.Delete(id)

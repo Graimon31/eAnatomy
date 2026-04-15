@@ -384,12 +384,15 @@ func (h *EditorHandler) UploadSlices(c *gin.Context) {
 	}
 
 	ctx := context.Background()
-	h.Redis.HSet(ctx, "task:"+taskID, map[string]interface{}{
+	if err := h.Redis.HSet(ctx, "task:"+taskID, map[string]interface{}{
 		"status":   "processing",
 		"progress": "0",
 		"done":     0,
 		"total":    len(filePaths),
-	})
+	}).Err(); err != nil {
+		errorResponse(c, http.StatusInternalServerError, "failed to initialize task", "REDIS_ERROR")
+		return
+	}
 	h.Redis.Expire(ctx, "task:"+taskID, 24*time.Hour)
 
 	c.JSON(http.StatusOK, gin.H{

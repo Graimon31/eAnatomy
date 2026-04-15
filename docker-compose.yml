@@ -96,6 +96,20 @@ services:
       - meili_data:/meili_data
     restart: unless-stopped
 
+  frontend-public:
+    build:
+      context: ./web/public
+      dockerfile: ../../docker/frontend-public.Dockerfile
+    volumes:
+      - public_dist:/app/dist
+
+  frontend-admin:
+    build:
+      context: ./web/admin
+      dockerfile: ../../docker/frontend-admin.Dockerfile
+    volumes:
+      - admin_dist:/app/dist
+
   nginx:
     image: nginx:alpine
     ports:
@@ -103,8 +117,12 @@ services:
       - "443:443"
     volumes:
       - ./docker/nginx.conf:/etc/nginx/nginx.conf
+      - public_dist:/usr/share/nginx/html/public:ro
+      - admin_dist:/usr/share/nginx/html/admin:ro
     depends_on:
       - api
+      - frontend-public
+      - frontend-admin
     restart: unless-stopped
 
 volumes:
@@ -112,3 +130,5 @@ volumes:
   redis_data:
   minio_data:
   meili_data:
+  public_dist:
+  admin_dist:

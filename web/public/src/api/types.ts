@@ -121,9 +121,11 @@ export interface SlicesResponse {
 export interface SearchResponse {
   terms: Array<{
     id: string;
-    fma_id: string;
-    translations: Translations;
-    category_id: number | null;
+    ru: string;
+    en: string;
+    la: string;
+    category_id: number;
+    color_hex: string;
   }>;
 }
 

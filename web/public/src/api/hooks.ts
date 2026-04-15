@@ -134,6 +134,18 @@ export function useSearch(q: string, lang: string = 'en') {
 /*  Auth                                                              */
 /* ------------------------------------------------------------------ */
 
+export function useMe() {
+  return useQuery<{ id: string; email: string; role: string; name: string }>({
+    queryKey: ['me'],
+    queryFn: async () => {
+      const { data } = await client.get('/auth/me');
+      return data;
+    },
+    enabled: !!localStorage.getItem('access_token'),
+    retry: false,
+  });
+}
+
 export function useLogin() {
   const queryClient = useQueryClient();
 

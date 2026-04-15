@@ -17,9 +17,9 @@ export default function SearchPage() {
         <div className="space-y-3">
           {data.terms.map((term) => (
             <div key={term.id} className="bg-white rounded-lg p-4 border border-slate-200">
-              <h3 className="font-medium text-slate-900">{term.translations?.ru || term.translations?.en}</h3>
-              {term.translations?.la && (
-                <p className="text-sm text-slate-500 italic">{term.translations.la}</p>
+              <h3 className="font-medium text-slate-900">{term.ru || term.en}</h3>
+              {term.la && (
+                <p className="text-sm text-slate-500 italic">{term.la}</p>
               )}
             </div>
           ))}
