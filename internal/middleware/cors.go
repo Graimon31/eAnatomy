@@ -10,8 +10,11 @@ import (
 // CORSMiddleware returns a Gin middleware that handles Cross-Origin Resource
 // Sharing. allowedOrigins is the list of origins permitted to access the API
 // (e.g. ["https://eanatomy.example.com"]).
+//
+// Note: AllowCredentials requires explicit origins — wildcard "*" is not
+// permitted by the spec when credentials are involved.
 func CORSMiddleware(allowedOrigins []string) gin.HandlerFunc {
-	return cors.New(cors.Config{
+	cfg := cors.Config{
 		AllowOrigins: allowedOrigins,
 		AllowMethods: []string{
 			"GET",
@@ -32,7 +35,20 @@ func CORSMiddleware(allowedOrigins []string) gin.HandlerFunc {
 			"Content-Length",
 			"Content-Type",
 		},
-		AllowCredentials: true,
-		MaxAge:           12 * time.Hour,
-	})
+		MaxAge: 12 * time.Hour,
+	}
+
+	// AllowCredentials is only valid with explicit origins.
+	hasWildcard := false
+	for _, o := range allowedOrigins {
+		if o == "*" {
+			hasWildcard = true
+			break
+		}
+	}
+	if !hasWildcard {
+		cfg.AllowCredentials = true
+	}
+
+	return cors.New(cfg)
 }

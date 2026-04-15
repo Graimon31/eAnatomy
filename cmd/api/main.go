@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"time"
@@ -93,7 +94,10 @@ func main() {
 	authH := authHandler.NewAuthHandler(authSvc)
 	adminH := adminHandler.NewAdminHandler(userSvc, moduleSvc, annotationSvc, subSvc)
 	editorH := editorHandler.NewEditorHandler(moduleSvc, annotationSvc, asynqClient, rdb)
-	publicH := publicHandler.NewPublicHandler(moduleSvc, annotationSvc, regionSvc, rdb)
+	cidrProvider := func(ctx context.Context) ([]string, error) {
+		return ipRangeRepo.GetAllCIDRs()
+	}
+	publicH := publicHandler.NewPublicHandler(moduleSvc, annotationSvc, regionSvc, rdb, cidrProvider)
 
 	// JWT config for middleware
 	jwtCfg := middleware.JWTConfig{
@@ -108,6 +112,8 @@ func main() {
 	}
 
 	r := gin.New()
+	// Trust the nginx reverse proxy to set X-Real-IP / X-Forwarded-For.
+	_ = r.SetTrustedProxies([]string{"127.0.0.1", "172.16.0.0/12", "10.0.0.0/8"})
 	r.Use(gin.Recovery())
 	r.Use(middleware.CORSMiddleware([]string{"*"}))
 

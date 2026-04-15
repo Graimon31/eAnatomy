@@ -1,10 +1,19 @@
 package repository
 
 import (
+	"strings"
+
 	"github.com/google/uuid"
 	"github.com/graimon31/eanatomy/internal/domain/annotation"
 	"gorm.io/gorm"
 )
+
+func escapeLikeAnnotation(s string) string {
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "%", "\\%")
+	s = strings.ReplaceAll(s, "_", "\\_")
+	return s
+}
 
 // AnnotationRepo implements annotation.AnnotationRepository.
 type AnnotationRepo struct {
@@ -100,7 +109,7 @@ func (r *AnatomicalTermRepo) List(filter annotation.TermFilter) ([]annotation.An
 		query = query.Where("category_id = ?", filter.CategoryID)
 	}
 	if filter.Search != "" {
-		search := "%" + filter.Search + "%"
+		search := "%" + escapeLikeAnnotation(filter.Search) + "%"
 		query = query.Where("translations::text LIKE ?", search)
 	}
 

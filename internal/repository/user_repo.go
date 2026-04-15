@@ -1,10 +1,20 @@
 package repository
 
 import (
+	"strings"
+
 	"github.com/google/uuid"
 	"github.com/graimon31/eanatomy/internal/domain/user"
 	"gorm.io/gorm"
 )
+
+// escapeLike escapes SQL LIKE wildcards in user-provided search input.
+func escapeLike(s string) string {
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "%", "\\%")
+	s = strings.ReplaceAll(s, "_", "\\_")
+	return s
+}
 
 type UserRepo struct {
 	db *gorm.DB
@@ -56,7 +66,7 @@ func (r *UserRepo) List(filter user.UserFilter) ([]user.User, int64, error) {
 		query = query.Where("role = ?", filter.Role)
 	}
 	if filter.Search != "" {
-		search := "%" + filter.Search + "%"
+		search := "%" + escapeLike(filter.Search) + "%"
 		query = query.Where("email LIKE ? OR name LIKE ?", search, search)
 	}
 

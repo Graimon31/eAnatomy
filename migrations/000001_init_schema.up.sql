@@ -68,7 +68,7 @@ CREATE TABLE projections (
   id          SERIAL PRIMARY KEY,
   module_id   UUID REFERENCES modules(id) ON DELETE CASCADE,
   type        VARCHAR(20)
-              CHECK (type IN ('axial','sagittal','frontal','3d')),
+              CHECK (type IN ('axial','sagittal','coronal','frontal','3d')),
   sort_order  INT DEFAULT 0
 );
 

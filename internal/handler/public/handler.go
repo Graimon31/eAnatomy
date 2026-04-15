@@ -3,6 +3,7 @@ package public
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/graimon31/eanatomy/internal/domain/module"
+	"github.com/graimon31/eanatomy/internal/middleware"
 	"github.com/graimon31/eanatomy/internal/service"
 )
 
@@ -20,6 +22,7 @@ type PublicHandler struct {
 	annotationService *service.AnnotationService
 	regionService     *service.RegionService
 	redis             *redis.Client
+	cidrProvider      middleware.CIDRProvider
 }
 
 func NewPublicHandler(
@@ -27,12 +30,14 @@ func NewPublicHandler(
 	annotationSvc *service.AnnotationService,
 	regionSvc *service.RegionService,
 	rdb *redis.Client,
+	cidrProvider middleware.CIDRProvider,
 ) *PublicHandler {
 	return &PublicHandler{
 		moduleService:     moduleSvc,
 		annotationService: annotationSvc,
 		regionService:     regionSvc,
 		redis:             rdb,
+		cidrProvider:      cidrProvider,
 	}
 }
 
@@ -166,7 +171,7 @@ func (h *PublicHandler) GetModule(c *gin.Context) {
 		return
 	}
 
-	if m.AccessLevel == module.AccessPremium && !hasPremiumAccess(c) {
+	if m.AccessLevel == module.AccessPremium && !h.hasPremiumAccess(c) {
 		c.JSON(http.StatusOK, gin.H{
 			"module":         m,
 			"locked":         true,
@@ -230,7 +235,7 @@ func (h *PublicHandler) GetModuleSlices(c *gin.Context) {
 
 	// Premium restriction: only 3 preview slices
 	isPremium := m.AccessLevel == module.AccessPremium
-	hasAccess := hasPremiumAccess(c)
+	hasAccess := h.hasPremiumAccess(c)
 
 	if isPremium && !hasAccess && len(slices) > 3 {
 		slices = slices[:3]
@@ -355,13 +360,53 @@ func (h *PublicHandler) GetSubscriptionStatus(c *gin.Context) {
 
 // hasPremiumAccess checks if the current request has premium access
 // (either via subscription or IP-based institutional access).
-func hasPremiumAccess(c *gin.Context) bool {
+func (h *PublicHandler) hasPremiumAccess(c *gin.Context) bool {
+	// Check JWT-based subscription flag (set by JWTAuth middleware if present).
 	if active, exists := c.Get("subscriptionActive"); exists {
 		if isActive, ok := active.(bool); ok && isActive {
 			return true
 		}
 	}
+
+	// Check IP-based institutional access.
+	if h.cidrProvider != nil {
+		clientIP := net.ParseIP(c.ClientIP())
+		if clientIP != nil {
+			cidrs, err := getCachedCIDRsForPublic(c.Request.Context(), h.redis, h.cidrProvider)
+			if err == nil {
+				for _, cidr := range cidrs {
+					_, network, err := net.ParseCIDR(cidr)
+					if err != nil {
+						continue
+					}
+					if network.Contains(clientIP) {
+						return true
+					}
+				}
+			}
+		}
+	}
+
 	return false
+}
+
+// getCachedCIDRsForPublic reads CIDR ranges from Redis cache or falls back to the provider.
+func getCachedCIDRsForPublic(ctx context.Context, rdb *redis.Client, provider middleware.CIDRProvider) ([]string, error) {
+	data, err := rdb.Get(ctx, "ip_ranges_cache").Bytes()
+	if err == nil {
+		var cidrs []string
+		if jsonErr := json.Unmarshal(data, &cidrs); jsonErr == nil {
+			return cidrs, nil
+		}
+	}
+	cidrs, err := provider(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if encoded, jsonErr := json.Marshal(cidrs); jsonErr == nil {
+		_ = rdb.Set(ctx, "ip_ranges_cache", encoded, 5*time.Minute).Err()
+	}
+	return cidrs, nil
 }
 
 // extractTranslation extracts a translation for the given language from JSONB data.

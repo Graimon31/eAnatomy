@@ -73,6 +73,7 @@ type ProjectionType string
 const (
 	ProjectionAxial    ProjectionType = "axial"
 	ProjectionSagittal ProjectionType = "sagittal"
+	ProjectionCoronal  ProjectionType = "coronal"
 	ProjectionFrontal  ProjectionType = "frontal"
 	Projection3D       ProjectionType = "3d"
 )
